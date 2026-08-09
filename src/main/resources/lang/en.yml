@@ -1413,6 +1413,8 @@ messages:
     id:
       description: "Get the Slimefun ID of the item in hand."
       message: "&7The Slimefun item of the item in your hand is &f{0}&7, the id is: (Click on the ID below to copy)"
+    doctor:
+      description: "Scan, migrate and verify InfinityExpansion v1 data."
     debug:
       description: "Manage debug cases for the plugin."
       invalid-action: "&cInvalid action: &f{0}"

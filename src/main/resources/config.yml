@@ -1,8 +1,9 @@
 ## InfinityExpansion2 main configuration file
 ## Visit wiki for more details: https://docs.ybw0014.dev/infinity-expansion-2/config/main
 
-# You should enable this to get bug fixes and receive support
-auto-update: true
+# Runtime JAR self-updating is disabled in this compatibility fork so an upstream binary cannot
+# overwrite the IE1 migration/Legacy safety layer. Use the GitHub upstream-sync/release workflows.
+auto-update: false
 
 # The default language of the plugin
 # SlimefunTranslation is supported.
@@ -10,6 +11,25 @@ lang: en
 
 # Whether to enable researches in the plugin
 enable-researches: false
+
+# InfinityExpansion v1 -> InfinityExpansion2 migration / doctor
+# Keep this enabled until /ie2 doctor scan reports no remaining IE1 records in your active areas.
+migration:
+  enabled: true
+
+  # IE1 used un-prefixed Slimefun IDs. IE2 uses IE_ IDs. Old block records are
+  # temporarily aliased so they can load safely, then permanently rewritten as chunks load.
+  auto-migrate-blocks: true
+
+  # Converts IE1 items in player/ender inventories, loaded vanilla containers, Slimefun menus,
+  # inventory entities, dropped items, displays/frames, equipment, nested containers and bundles.
+  # Filled IE1 storage units are decoded and converted to IE2's storage format.
+  auto-migrate-items: true
+
+  # Rebuild current IE2 items from the latest templates while preserving durability,
+  # enchantments, armor trims and addon PDC. This keeps Infinity armor/tool presentation
+  # current after Minecraft/Slimefun display changes.
+  refresh-modern-items-on-join: true
 
 # Debug options
 debug:
@@ -84,11 +104,16 @@ mob-simulation:
   output-interval: 20
 
   # Whether cards can be stackable.
-  # When enabled, the product will be multiplied by the amount of cards. The energy consumption is also multiplied.
+  # When enabled, product and XP are multiplied by the amount of cards.
   # When disabled, multiple cards always produce 1x.
-  # Tip: when enabled, you may have to change the energy capacity of Mob Simulation Chamber accordingly,
-  #   since stacked cards may exceed the energy capacity and the chamber will always complain about not enough energy.
   allow-stacked-card: false
+
+  # Albion/Legacy power compatibility fix (default false).
+  # Upstream IE2 adds the data card's energy value to the chamber's own power requirement.
+  # That extra gate can produce false "Insufficient Power" behavior with some Slimefun power runtimes.
+  # false = consume only the chamber's configured energy-per-tick (recommended/default).
+  # true  = restore upstream-style card extra energy charging; stacked cards multiply card cost.
+  charge-card-energy: false
 
   # The multiplier for the experience given by mob simulation.
   # range: 0.0 to 1000.0, default: 1.0
