@@ -1,3 +1,11 @@
+## Legacy runtime hotfix 5 - cross-addon Slimefun ID ownership
+
+- Fixed IE1 migration aliases pre-claiming legitimate Slimefun IDs from other addons during startup.
+- Startup now installs only explicit historical InfinityExpansion v1 aliases; generic `IE_` prefix aliases wait until Slimefun addon registration has finalized.
+- Added canonical-owner protection so the migration scanner will not rewrite an item/block ID that is currently owned by another registered addon.
+- Prevents known collisions such as ExoticGarden `ENDER_ESSENCE` versus IE2 `IE_ENDER_ESSENCE` and ExtraTools `COBBLESTONE_GENERATOR` versus IE2 `IE_COBBLESTONE_GENERATOR`.
+- Slimefun's duplicate-ID protection remains intact; this fix does not weaken core conflict detection.
+
 # Fork changelog
 
 ## Legacy compatibility foundation

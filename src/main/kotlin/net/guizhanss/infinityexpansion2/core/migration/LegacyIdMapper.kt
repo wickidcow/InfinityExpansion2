@@ -11,6 +11,9 @@ import io.github.thebusybiscuit.slimefun4.api.items.SlimefunItem
  */
 object LegacyIdMapper {
 
+    @Volatile
+    private var postRegistrationMappingsEnabled = false
+
     private val explicit = linkedMapOf(
         // Renamed core materials / workbench
         "INFINITE_INGOT" to "IE_INFINITY_INGOT",
@@ -75,9 +78,21 @@ object LegacyIdMapper {
     fun targetFor(sourceId: String?): String? {
         if (sourceId.isNullOrBlank() || sourceId.startsWith("IE_")) return null
 
+        /*
+         * Never migrate an id that is canonically owned by another registered addon.
+         * IE2's temporary compatibility aliases intentionally point an old key at an
+         * IE_ item whose real id is different, so those remain migratable.
+         */
+        val currentOwner = SlimefunItem.getById(sourceId)
+        if (currentOwner != null && currentOwner.id == sourceId) return null
+
         explicit[sourceId]?.let { target ->
             if (SlimefunItem.getById(target) != null) return target
         }
+
+        // Do not guess generic aliases until addon registration has completed. Before that
+        // another addon may still be about to claim this un-prefixed id canonically.
+        if (!postRegistrationMappingsEnabled) return null
 
         // IE1 dynamic cards were COW_DATA_CARD, ZOMBIE_DATA_CARD, ...
         if (sourceId.endsWith("_DATA_CARD") && sourceId != "EMPTY_DATA_CARD") {
@@ -97,6 +112,19 @@ object LegacyIdMapper {
         val prefixed = "IE_$sourceId"
         return prefixed.takeIf { SlimefunItem.getById(it) != null }
     }
+
+    fun enablePostRegistrationMappings() {
+        postRegistrationMappingsEnabled = true
+    }
+
+    /**
+     * Startup-safe aliases are restricted to the explicit IE1 ids we know historically
+     * belonged to InfinityExpansion. Generic IE_ prefix aliases are deliberately omitted
+     * here because another addon may legitimately register the un-prefixed id later in
+     * the same server startup.
+     */
+    fun resolvedStartupAliases(): Map<String, String> = explicit
+        .filterValues { SlimefunItem.getById(it) != null }
 
     /** All aliases that can currently be resolved to a registered IE2 item. */
     fun resolvedAliases(): Map<String, String> {

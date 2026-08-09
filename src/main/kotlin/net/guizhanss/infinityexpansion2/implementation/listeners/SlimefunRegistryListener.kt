@@ -33,11 +33,6 @@ class SlimefunRegistryListener(plugin: InfinityExpansion2) : Listener {
         // load mob simulation
         MobSimulationSetup
 
-        // Dynamic mob cards and oscillators now exist; expose their IE1 aliases too.
-        if (InfinityExpansion2.configService.migrationEnabled.value) {
-            InfinityExpansion2.migrationService.installAliases()
-        }
-
         // delayed task items
         Slimefun.getRegistry().enabledSlimefunItems.forEach { item ->
             if (item !is DelayedTaskItem) return@forEach
@@ -47,6 +42,18 @@ class SlimefunRegistryListener(plugin: InfinityExpansion2) : Listener {
             } else {
                 InfinityExpansion2.scheduler().runAsync(item::delayedTask)
             }
+        }
+    }
+
+
+    @EventHandler(priority = EventPriority.HIGHEST)
+    @Suppress("unused_parameter")
+    fun installMigrationAliases(e: SlimefunItemRegistryFinalizedEvent) {
+        // At this point normal addon onEnable registration (and lower-priority finalized
+        // handlers) has already claimed its canonical ids. The migration bridge therefore
+        // skips real addon ownership instead of pre-claiming those ids for an IE2 alias.
+        if (InfinityExpansion2.configService.migrationEnabled.value) {
+            InfinityExpansion2.migrationService.installAliases()
         }
     }
 

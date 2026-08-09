@@ -16,7 +16,17 @@ class SlimefunCompatibilityBridge {
         val failed: Int = 0,
     )
 
-    fun installLegacyAliases(): AliasResult {
+    fun installStartupAliases(): AliasResult = installAliases(
+        LegacyIdMapper.resolvedStartupAliases(),
+        "startup-safe"
+    )
+
+    fun installLegacyAliases(): AliasResult = installAliases(
+        LegacyIdMapper.resolvedAliases(),
+        "post-registration"
+    )
+
+    private fun installAliases(aliases: Map<String, String>, phase: String): AliasResult {
         val registry = Slimefun.getRegistry()
         val ids = findMutableMap(registry, "getSlimefunItemIds") ?: run {
             InfinityExpansion2.log(
@@ -29,7 +39,6 @@ class SlimefunCompatibilityBridge {
         var installed = 0
         var skipped = 0
         var failed = 0
-        val aliases = LegacyIdMapper.resolvedAliases()
         aliases.forEach { (oldId, newId) ->
             val target = SlimefunItem.getById(newId) ?: return@forEach
             if (ids.containsKey(oldId)) {
@@ -45,7 +54,7 @@ class SlimefunCompatibilityBridge {
         if (failed > 0) {
             InfinityExpansion2.log(
                 Level.WARNING,
-                "IE1 migration: $failed legacy aliases could not be installed on this Slimefun implementation. " +
+                "IE1 migration: $failed $phase legacy aliases could not be installed on this Slimefun implementation. " +
                     "The doctor can still migrate records after their chunks load, but make a backup before first startup."
             )
         }

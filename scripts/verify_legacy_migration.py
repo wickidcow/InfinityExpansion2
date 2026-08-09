@@ -6,6 +6,8 @@ import sys
 root = Path(__file__).resolve().parents[1]
 mapper = (root / "src/main/kotlin/net/guizhanss/infinityexpansion2/core/migration/LegacyIdMapper.kt").read_text()
 service = (root / "src/main/kotlin/net/guizhanss/infinityexpansion2/core/migration/LegacyMigrationService.kt").read_text()
+bridge = (root / "src/main/kotlin/net/guizhanss/infinityexpansion2/core/migration/SlimefunCompatibilityBridge.kt").read_text()
+registry_listener = (root / "src/main/kotlin/net/guizhanss/infinityexpansion2/implementation/listeners/SlimefunRegistryListener.kt").read_text()
 build = (root / "build.gradle.kts").read_text()
 config = (root / "src/main/resources/config.yml").read_text()
 mobsim = (root / "src/main/kotlin/net/guizhanss/infinityexpansion2/implementation/items/mobsim/MobSimulationChamber.kt").read_text()
@@ -55,6 +57,25 @@ if 'charge-card-energy: false' not in config:
     errors.append("MobSim Legacy power compatibility must default to base chamber energy only")
 if 'mobSimChargeCardEnergy' not in mobsim or 'getEnergyConsumptionPerTick().toLong()' not in mobsim:
     errors.append("MobSim base-power compatibility path is missing")
+
+if 'currentOwner != null && currentOwner.id == sourceId' not in mapper:
+    errors.append("migration must not rewrite ids canonically owned by another addon")
+if 'postRegistrationMappingsEnabled' not in mapper or 'if (!postRegistrationMappingsEnabled) return null' not in mapper:
+    errors.append("post-registration generic migration gate is missing")
+if 'LegacyIdMapper.enablePostRegistrationMappings()' not in service:
+    errors.append("full alias installation must enable generic migration only after registration")
+if 'fun resolvedStartupAliases()' not in mapper or '.filterValues { SlimefunItem.getById(it) != null }' not in mapper:
+    errors.append("startup alias set must be restricted to explicit resolved IE1 ids")
+if 'installStartupAliases()' not in bridge or 'LegacyIdMapper.resolvedStartupAliases()' not in bridge:
+    errors.append("startup-safe alias installation path is missing")
+if 'migrationService.installStartupAliases()' not in main_plugin:
+    errors.append("plugin startup must install only startup-safe aliases")
+if 'migrationService.installAliases()' in main_plugin:
+    errors.append("plugin startup must not install the full generic alias set before other addons register")
+if 'EventPriority.HIGHEST' not in registry_listener or 'fun installMigrationAliases' not in registry_listener:
+    errors.append("post-registration alias installation must run after normal finalized-event registration")
+if 'InfinityExpansion2.migrationService.installAliases()' not in registry_listener:
+    errors.append("full alias set is not installed after addon registration finalizes")
 
 if errors:
     print("Legacy migration verification failed:")

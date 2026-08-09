@@ -17,8 +17,9 @@ enable-researches: false
 migration:
   enabled: true
 
-  # IE1 used un-prefixed Slimefun IDs. IE2 uses IE_ IDs. Old block records are
-  # temporarily aliased so they can load safely, then permanently rewritten as chunks load.
+  # IE1 used un-prefixed Slimefun IDs. IE2 uses IE_ IDs. Explicit historical IE1 ids are
+  # aliased during startup; generic aliases wait until addon registration is finalized so IE2
+  # never steals a canonical id from another addon. Loaded legacy records are then rewritten.
   auto-migrate-blocks: true
 
   # Converts IE1 items in player/ender inventories, loaded vanilla containers, Slimefun menus,

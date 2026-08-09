@@ -102,10 +102,12 @@ class InfinityExpansion2 : AbstractAddon(
         // item setup
         IEItems
 
-        // IE1 compatibility aliases must exist before Slimefun finishes loading world block data.
+        // Install only explicit, historically-owned IE1 ids during addon startup. Generic
+        // un-prefixed aliases are delayed until Slimefun finalizes addon registration so
+        // IE2 cannot pre-claim ids legitimately owned by ExoticGarden, ExtraTools, etc.
         migrationService = LegacyMigrationService(this)
         if (configService.migrationEnabled.value) {
-            migrationService.installAliases()
+            migrationService.installStartupAliases()
         }
 
         // researches setup

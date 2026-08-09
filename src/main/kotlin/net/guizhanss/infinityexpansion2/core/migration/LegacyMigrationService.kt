@@ -69,7 +69,19 @@ class LegacyMigrationService(private val plugin: InfinityExpansion2) : Listener 
         plugin.server.pluginManager.registerEvents(this, plugin)
     }
 
+    fun installStartupAliases() {
+        aliasesInstalled = compatibility.installStartupAliases()
+        if (aliasesInstalled.installed > 0 || aliasesInstalled.failed > 0) {
+            InfinityExpansion2.log(
+                Level.INFO,
+                "IE1 compatibility: ${aliasesInstalled.installed} startup-safe aliases installed, " +
+                    "${aliasesInstalled.skippedExisting} already owned, ${aliasesInstalled.failed} failed."
+            )
+        }
+    }
+
     fun installAliases() {
+        LegacyIdMapper.enablePostRegistrationMappings()
         aliasesInstalled = compatibility.installLegacyAliases()
         if (aliasesInstalled.installed > 0 || aliasesInstalled.failed > 0) {
             InfinityExpansion2.log(
