@@ -101,31 +101,47 @@ class MobSimulationChamber(
         // When stacked cards are enabled, one card stack represents parallel simulations.
         val multiplier = if (InfinityExpansion2.configService.mobSimAllowStackedCard.value) cardAmount else 1
 
-        // Legacy/Albion power fix: card energy is informational by default. Several Slimefun
-        // runtimes can expose a large card-specific requirement that fails the chamber's internal
-        // capacity gate even while the network has ample power. The chamber therefore drains only
-        // its configured base power unless an admin explicitly restores upstream card charging.
-        val requestedEnergy = if (InfinityExpansion2.configService.mobSimChargeCardEnergy.value) {
+        // Legacy/Albion power compatibility.
+        //
+        // AbstractTickingMachine.tick() has already verified that the chamber has at least its
+        // configured base charge before process() is called. Do not perform a second base/card
+        // charge gate here in compatibility mode: the proven Albion MobSim patch deliberately
+        // avoided that second gate because it can report NO_POWER on Slimefun forks even while
+        // the surrounding energy network has ample stored power.
+        //
+        // charge-card-energy=false (default): preserve the previously tested compatibility
+        // behavior. The superclass performs the base-power presence check and this process tick
+        // removes one unit of local charge. This is intentionally conservative and prevents the
+        // false "Insufficient Power" regression seen on Legacy/Gugu-style energy runtimes.
+        //
+        // charge-card-energy=true: opt back into upstream-style full card-energy charging.
+        val chargeCardEnergy = InfinityExpansion2.configService.mobSimChargeCardEnergy.value
+        val requestedEnergy = if (chargeCardEnergy) {
             getEnergyConsumptionPerTick().toLong() + props.energy.toLong() * multiplier.toLong()
         } else {
             getEnergyConsumptionPerTick().toLong()
         }
-        if (requestedEnergy <= 0L || requestedEnergy > capacity.toLong() || requestedEnergy > MAX_SAFE_ENERGY.toLong()) {
-            menu.setStatus { GuiItems.NO_POWER }
-            menu.setEnergyConsumption(0)
-            return false
-        }
-        val energy = requestedEnergy.toInt()
 
-        if (getCharge(menu.location) < energy) {
-            menu.setStatus { GuiItems.NO_POWER }
-            menu.setEnergyConsumption(0)
-            return false
+        val displayEnergy = requestedEnergy.coerceIn(1L, MAX_SAFE_ENERGY.toLong()).toInt()
+        val energyToDrain = if (chargeCardEnergy) {
+            if (
+                requestedEnergy <= 0L ||
+                requestedEnergy > capacity.toLong() ||
+                requestedEnergy > MAX_SAFE_ENERGY.toLong() ||
+                getCharge(menu.location).toLong() < requestedEnergy
+            ) {
+                menu.setStatus { GuiItems.NO_POWER }
+                menu.setEnergyConsumption(0)
+                return false
+            }
+            requestedEnergy.toInt()
+        } else {
+            LEGACY_COMPATIBILITY_DRAIN
         }
 
         val currentXp = l.getInt(XP_KEY)
         menu.setStatus { GuiItems.PRODUCING }
-        menu.setEnergyConsumption(energy)
+        menu.setEnergyConsumption(displayEnergy)
         menu.replaceExistingItem(XP_SLOT, GuiItems.experience(currentXp))
 
         val outputTicks = InfinityExpansion2.configService.mobSimInterval.value.toLong() * getCustomTickRate().toLong()
@@ -165,7 +181,7 @@ class MobSimulationChamber(
             menu.replaceExistingItem(XP_SLOT, GuiItems.experience(newXp))
         }
 
-        removeCharge(l, energy)
+        removeCharge(l, energyToDrain)
         // handle custom energy consumption, so always return false
         return false
     }
@@ -211,6 +227,7 @@ class MobSimulationChamber(
         private const val XP_SLOT = 8
         private const val XP_KEY = "xp"
         private const val MAX_SAFE_ENERGY = 2_000_000_000
+        private const val LEGACY_COMPATIBILITY_DRAIN = 1
         private const val MAX_OUTPUT_STACKS = 4096
 
         /**
