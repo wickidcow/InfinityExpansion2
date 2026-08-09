@@ -30,6 +30,11 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v6
 
+      - name: Verify Java and Gradle runtime
+        run: |
+          java -version
+          ./gradlew --version
+
       - name: Build Paper 26.2 target
         run: ./gradlew clean shadowJar --stacktrace -PpaperApiVersion=26.2.build.+
 
