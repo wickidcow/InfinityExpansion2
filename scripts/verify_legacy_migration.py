@@ -24,6 +24,7 @@ required_mappings = {
     '"DATA_INFUSER" to "IE_MOB_DATA_INFUSER"',
 }
 errors = [f"missing mapping: {m}" for m in sorted(required_mappings) if m not in mapper]
+
 if 'sourceId.endsWith("_DATA_CARD")' not in mapper:
     errors.append("dynamic IE1 mob-card migration is missing")
 if 'sourceId.startsWith("QUARRY_OSCILLATOR_")' not in mapper:
@@ -32,8 +33,29 @@ if 'location.block.setType' in service:
     errors.append("migration must not change the physical Bukkit block material")
 if 'data["stored"]' not in service or '"stored_amount"' not in service:
     errors.append("legacy block storage amount translation is missing")
-if 'scanSlimefunMenus' not in service:
+
+# Virtual Slimefun menus must stay included, but block+menu traversal should share one
+# controller snapshot to avoid scanning the entire loaded Slimefun cache twice.
+if 'scanSlimefunData' not in service or 'scanMenus = true' not in service:
     errors.append("virtual Slimefun machine-menu item migration is missing")
+slimefun_scan_body = service.split("private fun scanSlimefunData(", 1)[1].split("private fun migrateBlock(", 1)[0]
+if slimefun_scan_body.count("loadedBlockData(controller)") != 1:
+    errors.append("Slimefun block/menu migration must use one loaded-data snapshot per pass")
+
+# Automatic chunk migration is Bukkit/Slimefun main-thread work. It must never run the
+# full migration directly from every ChunkLoadEvent; queue, deduplicate and rate-limit it.
+if 'processNextQueuedChunk()' not in service or 'AUTO_QUEUE_PERIOD_TICKS' not in service:
+    errors.append("automatic chunk migration queue/rate limiter is missing")
+if 'queuedChunkKeys' not in service or 'scannedThisSession' not in service:
+    errors.append("automatic chunk migration must deduplicate queued/reloaded chunks")
+chunk_load_body = service.split("fun onChunkLoad(event: ChunkLoadEvent)", 1)[1].split(
+    "@EventHandler(priority = EventPriority.MONITOR)", 1
+)[0]
+if "scanChunk(event.chunk" in chunk_load_body or "scanLoaded(" in chunk_load_body:
+    errors.append("ChunkLoadEvent must enqueue migration work instead of scanning synchronously")
+if 'world.loadedChunks.forEach(::queueChunk)' not in service:
+    errors.append("server-load migration must queue loaded chunks instead of scanning them all at once")
+
 if 'paperApiVersion=26.2.build.+' in build:
     errors.append("unexpected literal property syntax in Gradle source")
 if 'orElse("26.2.build.+")' not in build:
@@ -46,18 +68,19 @@ if 'kotlin("jvm") version "2.3.21"' not in build:
     errors.append("Kotlin Gradle plugin must remain on the Java-25-capable 2.3.21 line")
 if main_plugin.count('.version("2.3.21")') < 2:
     errors.append("runtime Kotlin stdlib/reflect versions must match Kotlin 2.3.21")
+
 # AbstractAddon invokes autoUpdate() before enable(); this hook must never touch lateinit
 # configService/instance-backed helpers or the plugin will fail during onEnable.
 auto_update_body = main_plugin.split("override fun autoUpdate()", 1)[1].split("private fun setupListeners()", 1)[0]
 if "configService" in auto_update_body or "log(" in auto_update_body:
     errors.append("autoUpdate lifecycle hook must remain config/instance-free before enable()")
+
 if 'auto-update: false' not in config:
     errors.append("runtime upstream self-update must remain disabled")
 if 'charge-card-energy: false' not in config:
     errors.append("MobSim Legacy power compatibility must default to base chamber energy only")
 if 'mobSimChargeCardEnergy' not in mobsim or 'getEnergyConsumptionPerTick().toLong()' not in mobsim:
     errors.append("MobSim base-power compatibility path is missing")
-
 if 'currentOwner != null && currentOwner.id == sourceId' not in mapper:
     errors.append("migration must not rewrite ids canonically owned by another addon")
 if 'postRegistrationMappingsEnabled' not in mapper or 'if (!postRegistrationMappingsEnabled) return null' not in mapper:
@@ -82,4 +105,5 @@ if errors:
     for error in errors:
         print(f" - {error}")
     sys.exit(1)
+
 print("Legacy migration verification passed.")

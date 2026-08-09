@@ -23,6 +23,9 @@ import org.bukkit.inventory.Inventory
 import org.bukkit.inventory.InventoryHolder
 import org.bukkit.inventory.ItemStack
 import java.lang.reflect.Field
+import java.util.ArrayDeque
+import java.util.HashSet
+import java.util.UUID
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.logging.Level
 
@@ -60,6 +63,20 @@ class LegacyMigrationService(private val plugin: InfinityExpansion2) : Listener 
     val itemMigrator = LegacyItemMigrator()
     private val migrationInProgress = AtomicBoolean(false)
 
+    /*
+     * Chunk-load migration must stay on the server thread because it touches Bukkit inventories,
+     * entities and Slimefun block data. Do not run that work directly from every ChunkLoadEvent:
+     * large view distances/teleports can fire hundreds of events together.
+     *
+     * Instead we de-duplicate chunk requests and process at most one chunk every few ticks.
+     * Legacy aliases keep old block IDs resolvable while a chunk waits in this queue.
+     */
+    private data class QueuedChunk(val worldId: UUID, val x: Int, val z: Int)
+
+    private val pendingChunks = ArrayDeque<QueuedChunk>()
+    private val queuedChunkKeys = HashSet<QueuedChunk>()
+    private val scannedThisSession = HashSet<QueuedChunk>()
+
     @Volatile
     var aliasesInstalled: SlimefunCompatibilityBridge.AliasResult =
         SlimefunCompatibilityBridge.AliasResult(0, 0, 0, 0)
@@ -67,6 +84,15 @@ class LegacyMigrationService(private val plugin: InfinityExpansion2) : Listener 
 
     init {
         plugin.server.pluginManager.registerEvents(this, plugin)
+
+        // Keep automatic migration bounded. Four chunks/second is intentionally conservative:
+        // aliases make waiting safe, while TPS remains far more important than migration speed.
+        plugin.server.scheduler.runTaskTimer(
+            plugin,
+            Runnable { processNextQueuedChunk() },
+            AUTO_QUEUE_PERIOD_TICKS,
+            AUTO_QUEUE_PERIOD_TICKS
+        )
     }
 
     fun installStartupAliases() {
@@ -96,8 +122,16 @@ class LegacyMigrationService(private val plugin: InfinityExpansion2) : Listener 
         if (migrate && !migrationInProgress.compareAndSet(false, true)) return MigrationStats()
         return try {
             val stats = MigrationStats()
-            stats += scanBlocks(null, migrate)
-            stats += scanSlimefunMenus(null, migrate)
+
+            // The old implementation walked Slimefun's complete loaded block cache once for
+            // blocks and again for virtual menus. One combined snapshot cuts that cost in half.
+            stats += scanSlimefunData(
+                chunkFilter = null,
+                migrate = migrate,
+                scanBlocks = true,
+                scanMenus = true
+            )
+
             plugin.server.worlds.forEach { world ->
                 world.loadedChunks.forEach { chunk -> stats += scanChunkItems(chunk, migrate) }
             }
@@ -108,31 +142,20 @@ class LegacyMigrationService(private val plugin: InfinityExpansion2) : Listener 
         }
     }
 
-
-    private fun scanLoadedAutomatic(): MigrationStats {
-        val stats = MigrationStats()
-        if (InfinityExpansion2.configService.migrationAutoBlocks.value) {
-            stats += scanBlocks(null, true)
-        }
-        if (InfinityExpansion2.configService.migrationAutoItems.value) {
-            stats += scanSlimefunMenus(null, true)
-            plugin.server.worlds.forEach { world ->
-                world.loadedChunks.forEach { chunk -> stats += scanChunkItems(chunk, true) }
-            }
-            plugin.server.onlinePlayers.forEach {
-                stats += scanPlayer(it, true, InfinityExpansion2.configService.migrationRefreshModernItems.value)
-            }
-        }
-        return stats
-    }
-
     fun scanChunk(chunk: Chunk, migrate: Boolean): MigrationStats {
         val stats = MigrationStats()
-        if (InfinityExpansion2.configService.migrationAutoBlocks.value || !migrate) {
-            stats += scanBlocks(chunk, migrate)
+        val scanBlocks = InfinityExpansion2.configService.migrationAutoBlocks.value || !migrate
+        val scanItems = InfinityExpansion2.configService.migrationAutoItems.value || !migrate
+
+        if (scanBlocks || scanItems) {
+            stats += scanSlimefunData(
+                chunkFilter = chunk,
+                migrate = migrate,
+                scanBlocks = scanBlocks,
+                scanMenus = scanItems
+            )
         }
-        if (InfinityExpansion2.configService.migrationAutoItems.value || !migrate) {
-            stats += scanSlimefunMenus(chunk, migrate)
+        if (scanItems) {
             stats += scanChunkItems(chunk, migrate)
         }
         return stats
@@ -251,35 +274,41 @@ class LegacyMigrationService(private val plugin: InfinityExpansion2) : Listener 
         }
     }
 
-    /** Scan virtual Slimefun menus too; these are not guaranteed to be the Bukkit Container inventory. */
-    private fun scanSlimefunMenus(chunkFilter: Chunk?, migrate: Boolean): MigrationStats {
-        val stats = MigrationStats()
-        val controller = blockDataController() ?: return stats
-        loadedBlockData(controller).forEach { data ->
-            val location = call(data, "getLocation") as? Location ?: return@forEach
-            if (chunkFilter != null && !sameChunk(location, chunkFilter)) return@forEach
-            val menu = call(data, "getBlockMenu") as? BlockMenu ?: return@forEach
-            stats += scanInventory(menu.toInventory(), migrate, false)
-        }
-        return stats
-    }
-
     /**
-     * Reads the loaded Slimefun block-data cache reflectively. Legacy/Gugu and Core/United moved
-     * storage implementation packages over time, so this deliberately avoids linking to either
-     * controller implementation class.
+     * Scan Slimefun block records and virtual menus from one controller snapshot.
+     *
+     * This is deliberately shared by block and item migration. The previous implementation
+     * reconstructed the complete loaded Slimefun data list twice for every ChunkLoadEvent,
+     * then filtered both copies down to a single chunk. On a large server that becomes
+     * O(chunk-loads x all-loaded-Slimefun-blocks) work on the primary server thread.
      */
-    private fun scanBlocks(chunkFilter: Chunk?, migrate: Boolean): MigrationStats {
+    private fun scanSlimefunData(
+        chunkFilter: Chunk?,
+        migrate: Boolean,
+        scanBlocks: Boolean,
+        scanMenus: Boolean,
+    ): MigrationStats {
         val stats = MigrationStats()
         val controller = blockDataController() ?: return stats
         val blockData = loadedBlockData(controller)
         if (blockData.isEmpty()) return stats
 
-        // Snapshot first because remove/create mutates the controller's underlying maps.
+        // loadedBlockData() is already a snapshot, which is important because migrateBlock()
+        // removes/recreates records in the controller.
         blockData.forEach { data ->
             val location = call(data, "getLocation") as? Location ?: return@forEach
             if (chunkFilter != null && !sameChunk(location, chunkFilter)) return@forEach
 
+            // Scan the old menu before a possible record rewrite. migrateBlock() snapshots the
+            // updated contents, so migrated IE1 items inside machine menus are retained.
+            if (scanMenus) {
+                val menu = call(data, "getBlockMenu") as? BlockMenu
+                if (menu != null) {
+                    stats += scanInventory(menu.toInventory(), migrate, false)
+                }
+            }
+
+            if (!scanBlocks) return@forEach
             val sourceId = call(data, "getSfId") as? String ?: return@forEach
             val targetId = LegacyIdMapper.targetFor(sourceId) ?: return@forEach
             stats.legacyBlocksFound++
@@ -444,6 +473,38 @@ class LegacyMigrationService(private val plugin: InfinityExpansion2) : Listener 
     private fun sameChunk(location: Location, chunk: Chunk): Boolean =
         location.world?.uid == chunk.world.uid && (location.blockX shr 4) == chunk.x && (location.blockZ shr 4) == chunk.z
 
+    private fun queueChunk(chunk: Chunk) {
+        val key = QueuedChunk(chunk.world.uid, chunk.x, chunk.z)
+        if (key in scannedThisSession || !queuedChunkKeys.add(key)) return
+        pendingChunks.addLast(key)
+    }
+
+    private fun processNextQueuedChunk() {
+        if (!InfinityExpansion2.configService.migrationEnabled.value ||
+            (!InfinityExpansion2.configService.migrationAutoBlocks.value &&
+                !InfinityExpansion2.configService.migrationAutoItems.value)
+        ) {
+            return
+        }
+
+        while (pendingChunks.isNotEmpty()) {
+            val key = pendingChunks.removeFirst()
+            queuedChunkKeys.remove(key)
+
+            val world = plugin.server.getWorld(key.worldId) ?: continue
+
+            // Never force-load a chunk just for migration. If it unloaded before reaching the
+            // queue head, its next genuine ChunkLoadEvent will enqueue it again.
+            if (!world.isChunkLoaded(key.x, key.z)) continue
+
+            scannedThisSession.add(key)
+            val chunk = world.getChunkAt(key.x, key.z)
+            val stats = scanChunk(chunk, true)
+            logAutoStats("chunk ${key.x},${key.z}", stats)
+            return
+        }
+    }
+
     @EventHandler(priority = EventPriority.MONITOR)
     fun onServerLoad(event: ServerLoadEvent) {
         if (!InfinityExpansion2.configService.migrationEnabled.value) return
@@ -452,10 +513,12 @@ class LegacyMigrationService(private val plugin: InfinityExpansion2) : Listener 
             !InfinityExpansion2.configService.migrationAutoItems.value
         ) return
 
-        // Give Slimefun's own server-load handlers time to finish hydrating block menus first.
+        // Do not synchronously rescan every loaded chunk two seconds after startup. Queue the
+        // already-loaded set and let the bounded worker drain it gradually.
         plugin.server.scheduler.runTaskLater(plugin, Runnable {
-            val stats = scanLoadedAutomatic()
-            logAutoStats("server load", stats)
+            plugin.server.worlds.forEach { world ->
+                world.loadedChunks.forEach(::queueChunk)
+            }
         }, 40L)
     }
 
@@ -465,9 +528,13 @@ class LegacyMigrationService(private val plugin: InfinityExpansion2) : Listener 
             (!InfinityExpansion2.configService.migrationAutoBlocks.value &&
                 !InfinityExpansion2.configService.migrationAutoItems.value)
         ) return
+
+        // Wait briefly for Slimefun to hydrate its block/menu data, then only enqueue. The actual
+        // scan is rate-limited by processNextQueuedChunk().
         plugin.server.scheduler.runTaskLater(plugin, Runnable {
-            val stats = scanChunk(event.chunk, true)
-            logAutoStats("chunk ${event.chunk.x},${event.chunk.z}", stats)
+            if (event.chunk.isLoaded) {
+                queueChunk(event.chunk)
+            }
         }, 2L)
     }
 
@@ -510,6 +577,7 @@ class LegacyMigrationService(private val plugin: InfinityExpansion2) : Listener 
 
     companion object {
         const val MIGRATION_KEY = "ie2_legacy_migrated"
+        private const val AUTO_QUEUE_PERIOD_TICKS = 5L
         private val LEGACY_STORAGE_IDS = setOf(
             "BASIC_STORAGE", "ADVANCED_STORAGE", "REINFORCED_STORAGE", "VOID_STORAGE", "INFINITY_STORAGE"
         )
