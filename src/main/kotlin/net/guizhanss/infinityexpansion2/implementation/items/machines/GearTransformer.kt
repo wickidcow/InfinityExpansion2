@@ -156,7 +156,7 @@ class GearTransformer(
         )
         private val ARMORS = mapOf(
             "LEATHER_" to Material.LEATHER.toItem(4),
-            "CHAINMAIL_" to Material.CHAIN.toItem(4),
+            "CHAINMAIL_" to Material.IRON_CHAIN.toItem(4),
             "IRON_" to Material.IRON_INGOT.toItem(4),
             "GOLDEN_" to Material.GOLD_INGOT.toItem(4),
             "DIAMOND_" to Material.DIAMOND.toItem(4),

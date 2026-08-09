@@ -179,12 +179,12 @@ class LegacyMigrationService(private val plugin: InfinityExpansion2) : Listener 
                 is ItemFrame -> {
                     val result = migrateSingle(entity.item, migrate)
                     stats += result.first
-                    if (migrate && result.second != null) entity.item = result.second!!
+                    if (migrate && result.second != null) entity.setItem(result.second!!)
                 }
                 is ItemDisplay -> {
                     val result = migrateSingle(entity.itemStack, migrate)
                     stats += result.first
-                    if (migrate && result.second != null) entity.itemStack = result.second!!
+                    if (migrate && result.second != null) entity.setItemStack(result.second!!)
                 }
                 is LivingEntity -> {
                     val equipment = entity.equipment
