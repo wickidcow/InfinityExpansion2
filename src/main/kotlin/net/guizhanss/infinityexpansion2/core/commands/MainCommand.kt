@@ -2,6 +2,7 @@ package net.guizhanss.infinityexpansion2.core.commands
 
 import net.guizhanss.guizhanlib.minecraft.commands.BaseCommand
 import net.guizhanss.infinityexpansion2.core.commands.subcommands.DebugCommand
+import net.guizhanss.infinityexpansion2.core.commands.subcommands.DoctorCommand
 import net.guizhanss.infinityexpansion2.core.commands.subcommands.GiveRecipeCommand
 import net.guizhanss.infinityexpansion2.core.commands.subcommands.GuideCommand
 import net.guizhanss.infinityexpansion2.core.commands.subcommands.IdCommand
@@ -15,6 +16,7 @@ class MainCommand(command: PluginCommand) : BaseCommand(
 
     init {
         addSubCommand(DebugCommand(this))
+        addSubCommand(DoctorCommand(this))
         addSubCommand(GiveRecipeCommand(this))
         addSubCommand(GuideCommand(this))
         addSubCommand(IdCommand(this))

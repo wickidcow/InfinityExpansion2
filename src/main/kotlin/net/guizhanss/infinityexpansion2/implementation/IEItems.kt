@@ -2372,6 +2372,77 @@ object IEItems : ItemRegistry(InfinityExpansion2.instance, InfinityExpansion2.lo
             'B' means Material.BARREL
         }
     }
+
+
+    // Legacy-capacity bridge tiers. IE1 storage mapped to tiers 2-6 so no stored capacity is lost.
+    val STORAGE_UNIT_2 by buildSlimefunItem<StorageUnit>(6_400) {
+        material = Material.SPRUCE_LOG.asMaterialType()
+        itemGroup = IEItemGroups.STORAGE
+        recipeType = IERecipeTypes.STORAGE_FORGE
+        recipe = buildRecipe {
+            +"MCM"
+            +"C1C"
+            +"MCM"
+            'M' means MAGSTEEL
+            'C' means MACHINE_CIRCUIT
+            '1' means STORAGE_UNIT_1
+        }
+    }
+
+    val STORAGE_UNIT_3 by buildSlimefunItem<StorageUnit>(25_600) {
+        material = Material.IRON_BLOCK.asMaterialType()
+        itemGroup = IEItemGroups.STORAGE
+        recipeType = IERecipeTypes.STORAGE_FORGE
+        recipe = buildRecipe {
+            +"MCM"
+            +"C2C"
+            +"MCM"
+            'M' means MAGNONIUM
+            'C' means MACHINE_CIRCUIT
+            '2' means STORAGE_UNIT_2
+        }
+    }
+
+    val STORAGE_UNIT_4 by buildSlimefunItem<StorageUnit>(102_400) {
+        material = Material.DIAMOND_BLOCK.asMaterialType()
+        itemGroup = IEItemGroups.STORAGE
+        recipeType = IERecipeTypes.STORAGE_FORGE
+        recipe = buildRecipe {
+            +"PCP"
+            +"C3C"
+            +"PCP"
+            'P' means MACHINE_PLATE
+            'C' means MACHINE_CORE
+            '3' means STORAGE_UNIT_3
+        }
+    }
+
+    val STORAGE_UNIT_5 by buildSlimefunItem<StorageUnit>(409_600) {
+        material = Material.OBSIDIAN.asMaterialType()
+        itemGroup = IEItemGroups.STORAGE
+        recipeType = IERecipeTypes.STORAGE_FORGE
+        recipe = buildRecipe {
+            +"VVV"
+            +"V4V"
+            +"VVV"
+            'V' means VOID_INGOT
+            '4' means STORAGE_UNIT_4
+        }
+    }
+
+    val STORAGE_UNIT_6 by buildSlimefunItem<StorageUnit>(1_600_000_000) {
+        material = Material.CRYING_OBSIDIAN.asMaterialType()
+        itemGroup = IEItemGroups.STORAGE
+        recipeType = IERecipeTypes.STORAGE_FORGE
+        recipe = buildRecipe {
+            +"IVI"
+            +"V5V"
+            +"IVI"
+            'I' means INFINITY_INGOT
+            'V' means VOID_INGOT
+            '5' means STORAGE_UNIT_5
+        }
+    }
     //</editor-fold>
 
     //<editor-fold desc="Hidden" defaultstate="collapsed">

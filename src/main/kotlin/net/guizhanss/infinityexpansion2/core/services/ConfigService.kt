@@ -23,6 +23,12 @@ class ConfigService(plugin: InfinityExpansion2) {
     lateinit var lang: ConfigField<String>
     lateinit var enableResearches: ConfigField<Boolean>
 
+    // IE1 migration / doctor options
+    lateinit var migrationEnabled: ConfigField<Boolean>
+    lateinit var migrationAutoBlocks: ConfigField<Boolean>
+    lateinit var migrationAutoItems: ConfigField<Boolean>
+    lateinit var migrationRefreshModernItems: ConfigField<Boolean>
+
     // debug options
     lateinit var debugEnabled: ConfigField<Boolean>
     lateinit var debugCases: ConfigField<List<String>>
@@ -39,6 +45,7 @@ class ConfigService(plugin: InfinityExpansion2) {
     // mob simulation options
     lateinit var mobSimInterval: ConfigField<Int>
     lateinit var mobSimAllowStackedCard: ConfigField<Boolean>
+    lateinit var mobSimChargeCardEnergy: ConfigField<Boolean>
     lateinit var mobSimExpMultiplier: ConfigField<Double>
     lateinit var mobSimLegacyOutput: ConfigField<Boolean>
 
@@ -71,9 +78,13 @@ class ConfigService(plugin: InfinityExpansion2) {
     }
 
     private val config = addonConfig(plugin, "config.yml", configMigrations) {
-        autoUpdate = boolean("auto-update", true)
+        autoUpdate = boolean("auto-update", false)
         lang = string("lang", InfinityExpansion2.DEFAULT_LANG)
         enableResearches = boolean("enable-researches", false)
+        migrationEnabled = boolean("migration.enabled", true)
+        migrationAutoBlocks = boolean("migration.auto-migrate-blocks", true)
+        migrationAutoItems = boolean("migration.auto-migrate-items", true)
+        migrationRefreshModernItems = boolean("migration.refresh-modern-items-on-join", true)
         debugEnabled = boolean("debug.enabled", false)
         debugCases = custom { it.getStringList("debug.cases") }
         singularityCostMultiplier = double("singularity.cost-multiplier", 1.0, 0.0, 1000.0)
@@ -82,6 +93,7 @@ class ConfigService(plugin: InfinityExpansion2) {
             custom { it.getMapList("resource-synthesizer.recipes").getAsSerializableList<ResourceSynthesizerRecipe>() }
         mobSimInterval = int("mob-simulation.output-interval", 20, 1, 3600)
         mobSimAllowStackedCard = boolean("mob-simulation.allow-stacked-card", false)
+        mobSimChargeCardEnergy = boolean("mob-simulation.charge-card-energy", false)
         mobSimExpMultiplier = double("mob-simulation.exp-multiplier", 1.0, 0.0, 1000.0)
         mobSimLegacyOutput = boolean("mob-simulation.legacy-output", false)
         storageEnableSigns = boolean("storage.enable-signs", false)
