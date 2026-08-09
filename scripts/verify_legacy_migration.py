@@ -44,6 +44,11 @@ if 'kotlin("jvm") version "2.3.21"' not in build:
     errors.append("Kotlin Gradle plugin must remain on the Java-25-capable 2.3.21 line")
 if main_plugin.count('.version("2.3.21")') < 2:
     errors.append("runtime Kotlin stdlib/reflect versions must match Kotlin 2.3.21")
+# AbstractAddon invokes autoUpdate() before enable(); this hook must never touch lateinit
+# configService/instance-backed helpers or the plugin will fail during onEnable.
+auto_update_body = main_plugin.split("override fun autoUpdate()", 1)[1].split("private fun setupListeners()", 1)[0]
+if "configService" in auto_update_body or "log(" in auto_update_body:
+    errors.append("autoUpdate lifecycle hook must remain config/instance-free before enable()")
 if 'auto-update: false' not in config:
     errors.append("runtime upstream self-update must remain disabled")
 if 'charge-card-energy: false' not in config:

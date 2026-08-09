@@ -73,6 +73,15 @@ class InfinityExpansion2 : AbstractAddon(
         configService = ConfigService(this)
         debugService = DebugService(this)
 
+        // AbstractAddon invokes autoUpdate() before enable(), so the override below must
+        // remain config-free. Report the disabled updater only after ConfigService exists.
+        if (configService.autoUpdate.value) {
+            log(
+                Level.WARNING,
+                "Runtime auto-update is disabled in the Legacy compatibility fork; use GitHub releases/upstream-sync instead."
+            )
+        }
+
         // tags
         IETag.reloadAll()
 
@@ -123,12 +132,10 @@ class InfinityExpansion2 : AbstractAddon(
     }
 
     override fun autoUpdate() {
-        // Runtime binary replacement is intentionally disabled in this fork. Updating directly
-        // from upstream could overwrite the IE1 migration/Legacy safety layer. GitHub Actions
-        // handles upstream synchronization and release builds instead.
-        if (configService.autoUpdate.value) {
-            log(Level.WARNING, "Runtime auto-update is disabled in the Legacy compatibility fork; use GitHub releases/upstream-sync instead.")
-        }
+        // Intentionally no-op. AbstractAddon calls this before enable(), before the fork's
+        // normal services and companion state are initialized. This early lifecycle hook must
+        // not depend on anything initialized by enable(). GitHub Actions handles upstream
+        // synchronization and release builds for this fork.
     }
 
     private fun setupListeners() {
