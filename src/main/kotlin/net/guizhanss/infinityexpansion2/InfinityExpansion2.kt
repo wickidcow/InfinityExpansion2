@@ -1,12 +1,11 @@
 package net.guizhanss.infinityexpansion2
 
-import io.github.thebusybiscuit.slimefun4.libraries.dough.updater.BlobBuildUpdater
 import io.papermc.lib.PaperLib
 import net.byteflux.libby.Library
 import net.guizhanss.guizhanlib.libraries.BukkitLibraryManager
 import net.guizhanss.guizhanlib.slimefun.addon.AbstractAddon
-import net.guizhanss.guizhanlib.updater.GuizhanBuildsUpdater
 import net.guizhanss.infinityexpansion2.core.commands.MainCommand
+import net.guizhanss.infinityexpansion2.core.migration.LegacyMigrationService
 import net.guizhanss.infinityexpansion2.core.services.ConfigService
 import net.guizhanss.infinityexpansion2.core.services.DebugService
 import net.guizhanss.infinityexpansion2.core.services.IntegrationService
@@ -24,8 +23,6 @@ import net.guizhanss.infinityexpansion2.implementation.tasks.InfinityMatrixTask
 import net.guizhanss.infinityexpansion2.utils.tags.IETag
 import org.bstats.bukkit.Metrics
 import org.bstats.charts.SimplePie
-import org.bukkit.plugin.Plugin
-import java.io.File
 import java.util.logging.Level
 
 class InfinityExpansion2 : AbstractAddon(
@@ -96,6 +93,12 @@ class InfinityExpansion2 : AbstractAddon(
         // item setup
         IEItems
 
+        // IE1 compatibility aliases must exist before Slimefun finishes loading world block data.
+        migrationService = LegacyMigrationService(this)
+        if (configService.migrationEnabled.value) {
+            migrationService.installAliases()
+        }
+
         // researches setup
         if (configService.enableResearches.value) {
             ResearchSetup
@@ -120,25 +123,11 @@ class InfinityExpansion2 : AbstractAddon(
     }
 
     override fun autoUpdate() {
-        if (pluginVersion.startsWith("Dev")) {
-            BlobBuildUpdater(this, file, githubRepo).start()
-        } else if (pluginVersion.startsWith("Build")) {
-            try {
-                // use updater in lib plugin
-                val clazz = Class.forName("net.guizhanss.minecraft.guizhanlib.updater.GuizhanUpdater")
-                val updaterStart = clazz.getDeclaredMethod(
-                    "start",
-                    Plugin::class.java,
-                    File::class.java,
-                    String::class.java,
-                    String::class.java,
-                    String::class.java
-                )
-                updaterStart.invoke(null, this, file, githubUser, githubRepo, githubBranch)
-            } catch (_: Exception) {
-                // use updater in lib
-                GuizhanBuildsUpdater.start(this, file, githubUser, githubRepo, githubBranch)
-            }
+        // Runtime binary replacement is intentionally disabled in this fork. Updating directly
+        // from upstream could overwrite the IE1 migration/Legacy safety layer. GitHub Actions
+        // handles upstream synchronization and release builds instead.
+        if (configService.autoUpdate.value) {
+            log(Level.WARNING, "Runtime auto-update is disabled in the Legacy compatibility fork; use GitHub releases/upstream-sync instead.")
         }
     }
 
@@ -163,7 +152,7 @@ class InfinityExpansion2 : AbstractAddon(
 
     companion object {
 
-        private const val GITHUB_USER = "ybw0014"
+        private const val GITHUB_USER = "wickidcow"
         private const val GITHUB_REPO = "InfinityExpansion2"
         private const val GITHUB_BRANCH = "master"
         private const val AUTO_UPDATE_KEY = "auto-update"
@@ -178,6 +167,8 @@ class InfinityExpansion2 : AbstractAddon(
         lateinit var localization: LocalizationService
             private set
         lateinit var integrationService: IntegrationService
+            private set
+        lateinit var migrationService: LegacyMigrationService
             private set
 
         fun scheduler() = getScheduler()
