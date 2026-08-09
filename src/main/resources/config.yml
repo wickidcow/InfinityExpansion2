@@ -13,20 +13,24 @@ lang: en
 enable-researches: false
 
 # InfinityExpansion v1 -> InfinityExpansion2 migration / doctor
-# Keep this enabled until /ie2 doctor scan reports no remaining IE1 records in your active areas.
+# The compatibility/doctor layer stays available by default, but automatic migration is opt-in.
+# This avoids startup/chunk-load scanning on large Slimefun servers.
 migration:
   enabled: true
 
   # IE1 used un-prefixed Slimefun IDs. IE2 uses IE_ IDs. Explicit historical IE1 ids are
   # aliased during startup; generic aliases wait until addon registration is finalized so IE2
   # never steals a canonical id from another addon. Loaded legacy records are then rewritten.
-  auto-migrate-blocks: true
+  # Opt-in: enable temporarily when you want loaded IE1 block records rewritten automatically.
+  auto-migrate-blocks: false
 
   # Converts IE1 items in player/ender inventories, loaded vanilla containers, Slimefun menus,
   # inventory entities, dropped items, displays/frames, equipment, nested containers and bundles.
   # Filled IE1 storage units are decoded and converted to IE2's storage format.
-  auto-migrate-items: true
+  # Opt-in: enable temporarily when you want loaded IE1 inventory/entity items rewritten automatically.
+  auto-migrate-items: false
 
+  # Only active when automatic item migration is enabled.
   # Rebuild current IE2 items from the latest templates while preserving durability,
   # enchantments, armor trims and addon PDC. This keeps Infinity armor/tool presentation
   # current after Minecraft/Slimefun display changes.

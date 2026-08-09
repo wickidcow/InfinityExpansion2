@@ -82,8 +82,8 @@ class ConfigService(plugin: InfinityExpansion2) {
         lang = string("lang", InfinityExpansion2.DEFAULT_LANG)
         enableResearches = boolean("enable-researches", false)
         migrationEnabled = boolean("migration.enabled", true)
-        migrationAutoBlocks = boolean("migration.auto-migrate-blocks", true)
-        migrationAutoItems = boolean("migration.auto-migrate-items", true)
+        migrationAutoBlocks = boolean("migration.auto-migrate-blocks", false)
+        migrationAutoItems = boolean("migration.auto-migrate-items", false)
         migrationRefreshModernItems = boolean("migration.refresh-modern-items-on-join", true)
         debugEnabled = boolean("debug.enabled", false)
         debugCases = custom { it.getStringList("debug.cases") }
