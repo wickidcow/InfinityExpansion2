@@ -16,7 +16,7 @@ The upstream IE2 project intentionally warns that it is not a drop-in replacemen
 - Mob Simulation power/output hardening: the Legacy power fix consumes chamber base power by default (optional upstream card-energy charging), with overflow-safe math, stacked-card product/XP handling, no XP-without-output, and no silent stack truncation.
 - Modern IE2 item/armor template refresh on join while retaining durability, enchantments, armor trims and non-conflicting PDC.
 - Runtime Slimefun storage-controller access is isolated behind reflection so the addon does not link directly to either the Legacy/Gugu or Core/United storage implementation package.
-- Paper 26.2 build target using Java 25 tooling, with Java 21 plugin bytecode.
+- Paper 26.2 build target using Java 25 tooling, with Java 21 plugin bytecode. The repository pins Gradle 9.3.0 + Kotlin 2.3.21 so Java 25 can run the build reliably.
 - GitHub CI, tagged release builds and an upstream-sync workflow that opens a review PR instead of overwriting fork-specific fixes.
 
 ## Safe IE1 server migration

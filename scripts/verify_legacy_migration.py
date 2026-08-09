@@ -9,6 +9,8 @@ service = (root / "src/main/kotlin/net/guizhanss/infinityexpansion2/core/migrati
 build = (root / "build.gradle.kts").read_text()
 config = (root / "src/main/resources/config.yml").read_text()
 mobsim = (root / "src/main/kotlin/net/guizhanss/infinityexpansion2/implementation/items/mobsim/MobSimulationChamber.kt").read_text()
+wrapper = (root / "gradle/wrapper/gradle-wrapper.properties").read_text()
+main_plugin = (root / "src/main/kotlin/net/guizhanss/infinityexpansion2/InfinityExpansion2.kt").read_text()
 
 required_mappings = {
     '"INFINITE_MACHINE_CIRCUIT" to "IE_INFINITY_MACHINE_CIRCUIT"',
@@ -36,6 +38,12 @@ if 'orElse("26.2.build.+")' not in build:
     errors.append("Paper 26.2 is not the default compile target")
 if 'jvmTarget = JvmTarget.JVM_21' not in build:
     errors.append("plugin bytecode target is not Java 21")
+if 'gradle-9.3.0-bin.zip' not in wrapper:
+    errors.append("Java 25 build requires the Gradle 9.3.0 wrapper")
+if 'kotlin("jvm") version "2.3.21"' not in build:
+    errors.append("Kotlin Gradle plugin must remain on the Java-25-capable 2.3.21 line")
+if main_plugin.count('.version("2.3.21")') < 2:
+    errors.append("runtime Kotlin stdlib/reflect versions must match Kotlin 2.3.21")
 if 'auto-update: false' not in config:
     errors.append("runtime upstream self-update must remain disabled")
 if 'charge-card-energy: false' not in config:
