@@ -33,6 +33,11 @@ class SlimefunRegistryListener(plugin: InfinityExpansion2) : Listener {
         // load mob simulation
         MobSimulationSetup
 
+        // Dynamic mob cards and oscillators now exist; expose their IE1 aliases too.
+        if (InfinityExpansion2.configService.migrationEnabled.value) {
+            InfinityExpansion2.migrationService.installAliases()
+        }
+
         // delayed task items
         Slimefun.getRegistry().enabledSlimefunItems.forEach { item ->
             if (item !is DelayedTaskItem) return@forEach
