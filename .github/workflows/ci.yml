@@ -35,10 +35,96 @@ jobs:
           java -version
           ./gradlew --version
 
+      # Keep this step non-terminal so the complete compiler output can be
+      # surfaced as an annotation/summary and uploaded even when Gradle fails.
       - name: Build Paper 26.2 target
-        run: ./gradlew clean shadowJar --stacktrace -PpaperApiVersion=26.2.build.+
+        id: paper_build
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -o pipefail
+          ./gradlew clean shadowJar \
+            --stacktrace \
+            --console=plain \
+            --warning-mode=all \
+            -PpaperApiVersion=26.2.build.+ \
+            2>&1 | tee build-paper-26.2.log
+
+      - name: Surface compiler diagnostics
+        if: steps.paper_build.outcome == 'failure'
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import os
+          import re
+          from pathlib import Path
+
+          path = Path('build-paper-26.2.log')
+          lines = path.read_text(errors='replace').splitlines() if path.exists() else ['Gradle build failed before a log was captured.']
+
+          patterns = [
+              re.compile(r'^e:\s', re.I),
+              re.compile(r'\berror:\s', re.I),
+              re.compile(r'\bunresolved reference\b', re.I),
+              re.compile(r'\bcannot access\b', re.I),
+              re.compile(r'\bcannot find symbol\b', re.I),
+              re.compile(r'\bcompilation error\b', re.I),
+              re.compile(r'^FAILURE:', re.I),
+              re.compile(r'^\* What went wrong:', re.I),
+              re.compile(r'Could not resolve', re.I),
+              re.compile(r'Could not find', re.I),
+              re.compile(r'Execution failed for task', re.I),
+          ]
+
+          hit_indices = [
+              i for i, line in enumerate(lines)
+              if any(pattern.search(line) for pattern in patterns)
+          ]
+
+          selected = set()
+          for i in hit_indices[:80]:
+              selected.update(range(max(0, i - 2), min(len(lines), i + 5)))
+
+          # If Gradle produced no conventional compiler marker, still expose
+          # the tail where dependency/plugin resolution failures usually live.
+          if not selected:
+              selected.update(range(max(0, len(lines) - 160), len(lines)))
+
+          excerpt = [lines[i] for i in sorted(selected)]
+          if len(excerpt) > 220:
+              excerpt = excerpt[:220]
+
+          text = '\n'.join(excerpt)
+          print('\n===== IE2 BUILD DIAGNOSTIC EXCERPT =====')
+          print(text)
+          print('===== END DIAGNOSTIC EXCERPT =====\n')
+
+          summary = os.environ.get('GITHUB_STEP_SUMMARY')
+          if summary:
+              with open(summary, 'a', encoding='utf-8') as fh:
+                  fh.write('## IE2 Paper 26.2 build failure\n\n')
+                  fh.write('The complete Gradle log is attached as the `InfinityExpansion2-Paper26.2-build-log` artifact.\n\n')
+                  fh.write('```text\n')
+                  fh.write(text[-30000:])
+                  fh.write('\n```\n')
+
+          # A workflow annotation is intentionally emitted because GitHub shows
+          # annotations on the public job page even when raw step logs require sign-in.
+          annotation = text[-12000:]
+          annotation = annotation.replace('%', '%25').replace('\r', '%0D').replace('\n', '%0A')
+          print(f'::error title=IE2 Paper 26.2 compiler diagnostics::{annotation}')
+          PY
+
+      - name: Upload failed build log
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: InfinityExpansion2-Paper26.2-build-log
+          path: build-paper-26.2.log
+          if-no-files-found: warn
 
       - name: Verify Java 21 plugin bytecode
+        if: steps.paper_build.outcome == 'success'
         run: |
           python3 - <<'PY'
           import glob, struct, zipfile
@@ -60,11 +146,16 @@ jobs:
           PY
 
       - name: Upload JAR
+        if: steps.paper_build.outcome == 'success'
         uses: actions/upload-artifact@v7
         with:
           name: InfinityExpansion2-Legacy-Paper-26.2
           path: build/libs/InfinityExpansion2-*.jar
           if-no-files-found: error
+
+      - name: Fail job if Paper build failed
+        if: steps.paper_build.outcome == 'failure'
+        run: exit 1
 
   source-safety:
     name: Migration safety checks
