@@ -1,40 +1,73 @@
-name: CI
+name: Build IE2 Legacy Fork
 
 on:
   push:
-    branches:
-      - master
+    branches: [master]
   pull_request:
-    branches:
-      - master
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
-  build:
+  paper-26-2:
+    name: Paper 26.2 / Java 25 build
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v6
 
-      - name: Set up JDK ${{ vars.BUILDS_JAVA_VERSION }}
+      - name: Set up Java 25
         uses: actions/setup-java@v5
         with:
-          java-version: ${{ vars.BUILDS_JAVA_VERSION }}
           distribution: temurin
+          java-version: '25'
 
       - name: Validate Gradle wrapper
-        uses: gradle/actions/wrapper-validation@v5
+        uses: gradle/actions/wrapper-validation@v6
 
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v5
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v6
 
-      - name: Build with Gradle
-        run: ./gradlew clean shadowJar
+      - name: Build Paper 26.2 target
+        run: ./gradlew clean shadowJar --stacktrace -PpaperApiVersion=26.2.build.+
 
-      - name: Get build artifact ready
-        run: mkdir staging && cp build/libs/*.jar staging
+      - name: Verify Java 21 plugin bytecode
+        run: |
+          python3 - <<'PY'
+          import glob, struct, zipfile
+          jars = glob.glob('build/libs/InfinityExpansion2-*.jar')
+          if not jars:
+              raise SystemExit('No IE2 jar produced')
+          majors = set()
+          with zipfile.ZipFile(jars[0]) as z:
+              for name in z.namelist():
+                  if not name.endswith('.class'):
+                      continue
+                  data = z.read(name)[:8]
+                  if len(data) == 8 and data[:4] == b'\xca\xfe\xba\xbe':
+                      majors.add(struct.unpack('>H', data[6:8])[0])
+          own = sorted(m for m in majors if m <= 65)
+          if 65 not in own:
+              raise SystemExit(f'Expected Java 21 class major 65; saw {sorted(majors)}')
+          print('Verified Java 21-compatible plugin classes (major 65).')
+          PY
 
-      - name: Upload a Build Artifact
-        uses: actions/upload-artifact@v5
+      - name: Upload JAR
+        uses: actions/upload-artifact@v7
         with:
-          name: Preview Build (Do not report bugs for this build)
-          path: staging
+          name: InfinityExpansion2-Legacy-Paper-26.2
+          path: build/libs/InfinityExpansion2-*.jar
+          if-no-files-found: error
+
+  source-safety:
+    name: Migration safety checks
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Verify migration invariants
+        run: |
+          python3 scripts/verify_legacy_migration.py

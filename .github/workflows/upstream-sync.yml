@@ -1,0 +1,76 @@
+name: Sync InfinityExpansion2 Upstream
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '17 9 * * 1'
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+concurrency:
+  group: ie2-upstream-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout fork
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Merge upstream into a review branch
+        id: merge
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git remote add upstream https://github.com/GuizhanCraft/InfinityExpansion2.git || true
+          git fetch upstream master
+          git fetch origin master
+
+          BRANCH="automation/upstream-sync"
+          # Fetch the review branch when it already exists so --force-with-lease has a
+          # current lease instead of failing on the second scheduled sync.
+          git fetch origin "$BRANCH:refs/remotes/origin/$BRANCH" 2>/dev/null || true
+          git checkout -B "$BRANCH" origin/master
+
+          if git merge-base --is-ancestor upstream/master HEAD; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "Fork already contains current upstream master."
+            exit 0
+          fi
+
+          if ! git merge --no-edit upstream/master; then
+            git merge --abort || true
+            TITLE="InfinityExpansion2 upstream sync conflict"
+            if ! gh issue list --state open --search "${TITLE} in:title" --json title --jq '.[].title' | grep -Fxq "$TITLE"; then
+              gh issue create --title "$TITLE" --body "Automatic merge from GuizhanCraft/InfinityExpansion2 master conflicted with the Legacy compatibility fork. Review the latest upstream changes manually; preserve src/main/kotlin/net/guizhanss/infinityexpansion2/core/migration and the Paper 26.2/MobSim safety changes."
+            fi
+            exit 1
+          fi
+
+          git push --force-with-lease origin "$BRANCH"
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+          echo "branch=$BRANCH" >> "$GITHUB_OUTPUT"
+
+      - name: Open or reuse upstream review PR
+        if: steps.merge.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          BRANCH="${{ steps.merge.outputs.branch }}"
+          EXISTING=$(gh pr list --head "$BRANCH" --base master --state open --json number --jq '.[0].number // empty')
+          if [[ -n "$EXISTING" ]]; then
+            gh pr edit "$EXISTING" --title "Sync upstream InfinityExpansion2" --body "Automated upstream merge. Review migration aliases, Slimefun compatibility, MobSim power/output behavior, armor/item refresh behavior, and Paper 26.2 build before merging."
+          else
+            gh pr create --base master --head "$BRANCH" --title "Sync upstream InfinityExpansion2" --body "Automated upstream merge. Review migration aliases, Slimefun compatibility, MobSim power/output behavior, armor/item refresh behavior, and Paper 26.2 build before merging."
+          fi
