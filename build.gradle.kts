@@ -21,7 +21,9 @@ val paperApiVersion = providers.gradleProperty("paperApiVersion").orElse("26.2.b
 val slimefunApiCoordinate = providers.gradleProperty("slimefunApiCoordinate")
     .orElse("com.github.slimefun:Slimefun4:experimental-SNAPSHOT")
 
-version = providers.gradleProperty("buildVersion").orElse("legacy-preview-$timestamp").get()
+// CI builds use a stable Legacy version family instead of the old "preview" label.
+// Tagged/manual releases can still provide an explicit version with -PbuildVersion=...
+version = providers.gradleProperty("buildVersion").orElse("1.0.$timestamp").get()
 
 repositories {
     mavenCentral()
@@ -82,6 +84,7 @@ tasks.shadowJar {
     doRelocate("com.jeff_media.morepersistentdatatypes")
     minimize()
     archiveClassifier = ""
+    archiveFileName.set("SF_IE2Legacy${project.version}.jar")
 }
 
 bukkit {
