@@ -128,9 +128,9 @@ jobs:
         run: |
           python3 - <<'PY'
           import glob, struct, zipfile
-          jars = glob.glob('build/libs/InfinityExpansion2-*.jar')
+          jars = glob.glob('build/libs/SF_IE2Legacy*.jar')
           if not jars:
-              raise SystemExit('No IE2 jar produced')
+              raise SystemExit('No IE2 Legacy jar produced')
           majors = set()
           with zipfile.ZipFile(jars[0]) as z:
               for name in z.namelist():
@@ -145,12 +145,12 @@ jobs:
           print('Verified Java 21-compatible plugin classes (major 65).')
           PY
 
-      - name: Upload JAR
+      - name: Upload SF_IE2Legacy JAR
         if: steps.paper_build.outcome == 'success'
         uses: actions/upload-artifact@v7
         with:
-          name: InfinityExpansion2-Legacy-Paper-26.2
-          path: build/libs/InfinityExpansion2-*.jar
+          name: SF_IE2Legacy
+          path: build/libs/SF_IE2Legacy*.jar
           if-no-files-found: error
 
       - name: Fail job if Paper build failed
