@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Release version (example: 1.0.0)'
+        description: 'Release version (format: 1.X.XX, example: 1.0.0)'
         required: true
         type: string
 
@@ -38,17 +38,25 @@ jobs:
           java -version
           ./gradlew --version
 
-      - name: Resolve version
+      - name: Resolve and validate version
         id: version
         shell: bash
         run: |
+          set -euo pipefail
           if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" ]]; then
             VERSION="${{ inputs.version }}"
-            TAG="v${VERSION#v}"
+            VERSION="${VERSION#v}"
+            TAG="v${VERSION}"
           else
             TAG="${GITHUB_REF_NAME}"
             VERSION="${TAG#v}"
           fi
+
+          if [[ ! "$VERSION" =~ ^1\.[0-9]\.[0-9]{1,2}$ ]]; then
+            echo "Release version must match 1.X.XX (examples: 1.0.0, 1.2.9, 1.4.12)." >&2
+            exit 1
+          fi
+
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
 
@@ -64,11 +72,24 @@ jobs:
           echo "path=$JAR" >> "$GITHUB_OUTPUT"
           sha256sum "$JAR"
 
-      - name: Upload workflow artifact
+      - name: Stage versioned Legacy release JAR
+        id: staged
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          OUTPUT="dist/SF_InfinityExpansion2_Legacy_v${{ steps.version.outputs.version }}.jar"
+          cp "${{ steps.jar.outputs.path }}" "$OUTPUT"
+          test -s "$OUTPUT"
+          echo "path=$OUTPUT" >> "$GITHUB_OUTPUT"
+          sha256sum "$OUTPUT"
+
+      - name: Upload direct workflow JAR
         uses: actions/upload-artifact@v7
         with:
-          name: SF_IE2Legacy${{ steps.version.outputs.version }}
-          path: ${{ steps.jar.outputs.path }}
+          path: ${{ steps.staged.outputs.path }}
+          archive: false
+          if-no-files-found: error
 
       - name: Create or update GitHub release
         env:
@@ -76,7 +97,7 @@ jobs:
         shell: bash
         run: |
           TAG="${{ steps.version.outputs.tag }}"
-          JAR="${{ steps.jar.outputs.path }}"
+          JAR="${{ steps.staged.outputs.path }}"
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release upload "$TAG" "$JAR" --clobber
           else
