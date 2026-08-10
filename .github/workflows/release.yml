@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Release version (example: 2.0.0-legacy.1)'
+        description: 'Release version (example: 1.0.0)'
         required: true
         type: string
 
@@ -55,19 +55,19 @@ jobs:
       - name: Build release JAR
         run: ./gradlew clean shadowJar --stacktrace -PpaperApiVersion=26.2.build.+ -PbuildVersion=${{ steps.version.outputs.version }}
 
-      - name: Normalize release filename
+      - name: Locate SF_IE2Legacy release JAR
         id: jar
         shell: bash
         run: |
-          SOURCE=$(find build/libs -maxdepth 1 -name 'InfinityExpansion2-*.jar' -print -quit)
-          TARGET="build/libs/InfinityExpansion2-Legacy-${{ steps.version.outputs.version }}.jar"
-          cp "$SOURCE" "$TARGET"
-          echo "path=$TARGET" >> "$GITHUB_OUTPUT"
+          JAR="build/libs/SF_IE2Legacy${{ steps.version.outputs.version }}.jar"
+          test -s "$JAR"
+          echo "path=$JAR" >> "$GITHUB_OUTPUT"
+          sha256sum "$JAR"
 
       - name: Upload workflow artifact
         uses: actions/upload-artifact@v7
         with:
-          name: InfinityExpansion2-Legacy-${{ steps.version.outputs.version }}
+          name: SF_IE2Legacy${{ steps.version.outputs.version }}
           path: ${{ steps.jar.outputs.path }}
 
       - name: Create or update GitHub release
@@ -80,5 +80,5 @@ jobs:
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release upload "$TAG" "$JAR" --clobber
           else
-            gh release create "$TAG" "$JAR" --generate-notes --title "InfinityExpansion2 Legacy $TAG"
+            gh release create "$TAG" "$JAR" --generate-notes --title "IE2 Legacy $TAG"
           fi
