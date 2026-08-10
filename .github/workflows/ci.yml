@@ -10,6 +10,9 @@ on:
 permissions:
   contents: read
 
+env:
+  LEGACY_ARTIFACT_VERSION: "1.0.0"
+
 jobs:
   paper-26-2:
     name: Paper 26.2 / Java 25 build
@@ -145,12 +148,25 @@ jobs:
           print('Verified Java 21-compatible plugin classes (major 65).')
           PY
 
-      - name: Upload SF_IE2Legacy JAR
+      - name: Stage versioned Legacy JAR
+        if: steps.paper_build.outcome == 'success'
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          mapfile -t jars < <(find build/libs -maxdepth 1 -type f -name 'SF_IE2Legacy*.jar' ! -name '*-sources.jar' ! -name '*-javadoc.jar')
+          test "${#jars[@]}" -eq 1
+          OUTPUT="dist/SF_InfinityExpansion2_Legacy_v${LEGACY_ARTIFACT_VERSION}.jar"
+          cp "${jars[0]}" "$OUTPUT"
+          test -s "$OUTPUT"
+          sha256sum "$OUTPUT"
+
+      - name: Upload direct versioned IE2 Legacy JAR
         if: steps.paper_build.outcome == 'success'
         uses: actions/upload-artifact@v7
         with:
-          name: SF_IE2Legacy
-          path: build/libs/SF_IE2Legacy*.jar
+          path: dist/SF_InfinityExpansion2_Legacy_v${{ env.LEGACY_ARTIFACT_VERSION }}.jar
+          archive: false
           if-no-files-found: error
 
       - name: Fail job if Paper build failed
