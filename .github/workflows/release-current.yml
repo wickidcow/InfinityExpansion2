@@ -1,0 +1,73 @@
+name: Publish IE2 Legacy Release
+
+on:
+  workflow_run:
+    workflows: ["Build IE2 Legacy Fork"]
+    types: [completed]
+
+permissions:
+  contents: write
+  actions: read
+
+env:
+  LEGACY_ARTIFACT_VERSION: "1.0.0"
+
+jobs:
+  release:
+    name: Publish current Legacy JAR
+    if: ${{ github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'master' }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download JAR from successful build
+        uses: actions/download-artifact@v8
+        with:
+          name: SF_InfinityExpansion2_Legacy_v${{ env.LEGACY_ARTIFACT_VERSION }}.jar
+          path: dist
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.repository }}
+          run-id: ${{ github.event.workflow_run.id }}
+
+      - name: Verify release JAR
+        shell: bash
+        run: |
+          set -euo pipefail
+          JAR="dist/SF_InfinityExpansion2_Legacy_v${LEGACY_ARTIFACT_VERSION}.jar"
+          test -s "$JAR"
+          sha256sum "$JAR"
+
+      - name: Publish GitHub Release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          TAG="v${LEGACY_ARTIFACT_VERSION}"
+          JAR="dist/SF_InfinityExpansion2_Legacy_v${LEGACY_ARTIFACT_VERSION}.jar"
+          TITLE="InfinityExpansion2 Legacy v${LEGACY_ARTIFACT_VERSION}"
+
+          cat > release-notes.md <<'EOF'
+          ## InfinityExpansion2 Legacy
+
+          Current maintained Slimefun Legacy release for Paper 26.2.
+
+          ### Highlights
+          - Paper 26.2 / Java 25 build target.
+          - Java 21-compatible addon bytecode.
+          - Slimefun Legacy compatibility-focused build.
+          - Standardized direct raw JAR: `SF_InfinityExpansion2_Legacy_v1.0.0.jar`.
+          - Built from the latest successful `master` workflow run.
+
+          This is a maintained compatibility fork. See the repository README and license for upstream credits and licensing information.
+          EOF
+
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" "$JAR" --clobber
+            gh release edit "$TAG" --title "$TITLE" --notes-file release-notes.md --latest
+          else
+            gh release create "$TAG" "$JAR" \
+              --target "${{ github.event.workflow_run.head_sha }}" \
+              --title "$TITLE" \
+              --notes-file release-notes.md \
+              --latest
+          fi
