@@ -11,7 +11,7 @@ permissions:
   contents: read
 
 env:
-  LEGACY_ARTIFACT_VERSION: "1.0.0"
+  LEGACY_ARTIFACT_VERSION: "1.0.1"
 
 jobs:
   paper-26-2:
@@ -51,6 +51,7 @@ jobs:
             --console=plain \
             --warning-mode=all \
             -PpaperApiVersion=26.2.build.+ \
+            -PbuildVersion="${LEGACY_ARTIFACT_VERSION}" \
             2>&1 | tee build-paper-26.2.log
 
       - name: Surface compiler diagnostics

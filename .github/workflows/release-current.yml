@@ -10,7 +10,7 @@ permissions:
   actions: read
 
 env:
-  LEGACY_ARTIFACT_VERSION: "1.0.0"
+  LEGACY_ARTIFACT_VERSION: "1.0.1"
 
 jobs:
   release:
@@ -50,16 +50,20 @@ jobs:
           TITLE="InfinityExpansion2 Legacy v${LEGACY_ARTIFACT_VERSION}"
 
           cat > release-notes.md <<'EOF'
-          ## InfinityExpansion2 Legacy
+          ## InfinityExpansion2 Legacy v1.0.1
 
-          Current maintained Slimefun Legacy release for Paper 26.2.
+          Patch release for the maintained Slimefun Legacy build of InfinityExpansion2 on Paper 26.2.
 
-          ### Highlights
-          - Paper 26.2 / Java 25 build target.
+          ### Changes
+          - Infinity gear now explicitly keeps real Minecraft enchantments visible in the normal item tooltip.
+          - No enchantments, enchantment levels, potion effects, protections, recipes, or balance values were added or changed by this fix.
+          - Release builds now pass the release version into Gradle so the plugin's internal version matches the GitHub release and output JAR.
+
+          ### Build target
+          - Paper 26.2 / Java 25 build environment.
           - Java 21-compatible addon bytecode.
           - Slimefun Legacy compatibility-focused build.
-          - Standardized direct raw JAR: `SF_InfinityExpansion2_Legacy_v1.0.0.jar`.
-          - Built from the latest successful `master` workflow run.
+          - Direct raw JAR: `SF_InfinityExpansion2_Legacy_v1.0.1.jar`.
 
           This is a maintained compatibility fork. See the repository README and license for upstream credits and licensing information.
           EOF
