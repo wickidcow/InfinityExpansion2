@@ -9,6 +9,7 @@ import net.guizhanss.infinityexpansion2.core.items.attributes.ProtectionType
 import net.guizhanss.infinityexpansion2.implementation.IEItems
 import net.guizhanss.infinityexpansion2.utils.Debug
 import net.guizhanss.infinityexpansion2.utils.bukkitext.ie2Key
+import org.bukkit.inventory.ItemFlag
 import org.bukkit.potion.PotionEffect
 import java.util.logging.Level
 
@@ -99,6 +100,12 @@ fun applyInfinityGearEnchantment(sfItem: SlimefunItemStack) {
 
         meta.addEnchant(enchantment, level, true)
     }
+
+    // Infinity gear uses real Bukkit enchantments. Keep the vanilla enchantment tooltip visible
+    // so players can see every enchantment that is actually present on the item. This does not
+    // add, remove, or change enchantments; it only clears an inherited tooltip-hiding flag.
+    meta.removeItemFlags(ItemFlag.HIDE_ENCHANTS)
+
     Debug.log(DebugCase.INFINITY_GEAR_CONFIG, "end enchantments")
     sfItem.itemMeta = meta
 }
