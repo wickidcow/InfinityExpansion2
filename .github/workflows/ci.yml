@@ -3,15 +3,17 @@ name: Build IE2 Legacy Fork
 on:
   push:
     branches: [master]
+    tags: ['v*']
   pull_request:
     branches: [master]
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 env:
   LEGACY_ARTIFACT_VERSION: "1.0.1"
+  OUTPUT_NAME: "SF_InfinityExpansion21.0.1.jar"
 
 jobs:
   paper-26-2:
@@ -20,115 +22,28 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
-
       - name: Set up Java 25
         uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '25'
-
       - name: Validate Gradle wrapper
         uses: gradle/actions/wrapper-validation@v6
-
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v6
-
-      - name: Verify Java and Gradle runtime
-        run: |
-          java -version
-          ./gradlew --version
-
-      # Keep this step non-terminal so the complete compiler output can be
-      # surfaced as an annotation/summary and uploaded even when Gradle fails.
       - name: Build Paper 26.2 target
-        id: paper_build
-        continue-on-error: true
         shell: bash
         run: |
           set -o pipefail
-          ./gradlew clean shadowJar \
-            --stacktrace \
-            --console=plain \
-            --warning-mode=all \
-            -PpaperApiVersion=26.2.build.+ \
-            -PbuildVersion="${LEGACY_ARTIFACT_VERSION}" \
-            2>&1 | tee build-paper-26.2.log
-
-      - name: Surface compiler diagnostics
-        if: steps.paper_build.outcome == 'failure'
-        shell: bash
-        run: |
-          python3 - <<'PY'
-          import os
-          import re
-          from pathlib import Path
-
-          path = Path('build-paper-26.2.log')
-          lines = path.read_text(errors='replace').splitlines() if path.exists() else ['Gradle build failed before a log was captured.']
-
-          patterns = [
-              re.compile(r'^e:\s', re.I),
-              re.compile(r'\berror:\s', re.I),
-              re.compile(r'\bunresolved reference\b', re.I),
-              re.compile(r'\bcannot access\b', re.I),
-              re.compile(r'\bcannot find symbol\b', re.I),
-              re.compile(r'\bcompilation error\b', re.I),
-              re.compile(r'^FAILURE:', re.I),
-              re.compile(r'^\* What went wrong:', re.I),
-              re.compile(r'Could not resolve', re.I),
-              re.compile(r'Could not find', re.I),
-              re.compile(r'Execution failed for task', re.I),
-          ]
-
-          hit_indices = [
-              i for i, line in enumerate(lines)
-              if any(pattern.search(line) for pattern in patterns)
-          ]
-
-          selected = set()
-          for i in hit_indices[:80]:
-              selected.update(range(max(0, i - 2), min(len(lines), i + 5)))
-
-          # If Gradle produced no conventional compiler marker, still expose
-          # the tail where dependency/plugin resolution failures usually live.
-          if not selected:
-              selected.update(range(max(0, len(lines) - 160), len(lines)))
-
-          excerpt = [lines[i] for i in sorted(selected)]
-          if len(excerpt) > 220:
-              excerpt = excerpt[:220]
-
-          text = '\n'.join(excerpt)
-          print('\n===== IE2 BUILD DIAGNOSTIC EXCERPT =====')
-          print(text)
-          print('===== END DIAGNOSTIC EXCERPT =====\n')
-
-          summary = os.environ.get('GITHUB_STEP_SUMMARY')
-          if summary:
-              with open(summary, 'a', encoding='utf-8') as fh:
-                  fh.write('## IE2 Paper 26.2 build failure\n\n')
-                  fh.write('The complete Gradle log is attached as the `InfinityExpansion2-Paper26.2-build-log` artifact.\n\n')
-                  fh.write('```text\n')
-                  fh.write(text[-30000:])
-                  fh.write('\n```\n')
-
-          # A workflow annotation is intentionally emitted because GitHub shows
-          # annotations on the public job page even when raw step logs require sign-in.
-          annotation = text[-12000:]
-          annotation = annotation.replace('%', '%25').replace('\r', '%0D').replace('\n', '%0A')
-          print(f'::error title=IE2 Paper 26.2 compiler diagnostics::{annotation}')
-          PY
-
-      - name: Upload failed build log
+          ./gradlew clean shadowJar --stacktrace --console=plain --warning-mode=all -PpaperApiVersion=26.2.build.+ -PbuildVersion="${LEGACY_ARTIFACT_VERSION}" 2>&1 | tee build-paper-26.2.log
+      - name: Upload build log
         if: always()
         uses: actions/upload-artifact@v7
         with:
           name: InfinityExpansion2-Paper26.2-build-log
           path: build-paper-26.2.log
           if-no-files-found: warn
-
       - name: Verify Java 21 plugin bytecode
-        if: steps.paper_build.outcome == 'success'
         run: |
           python3 - <<'PY'
           import glob, struct, zipfile
@@ -138,41 +53,44 @@ jobs:
           majors = set()
           with zipfile.ZipFile(jars[0]) as z:
               for name in z.namelist():
-                  if not name.endswith('.class'):
-                      continue
-                  data = z.read(name)[:8]
-                  if len(data) == 8 and data[:4] == b'\xca\xfe\xba\xbe':
-                      majors.add(struct.unpack('>H', data[6:8])[0])
-          own = sorted(m for m in majors if m <= 65)
-          if 65 not in own:
+                  if name.endswith('.class'):
+                      data = z.read(name)[:8]
+                      if len(data) == 8 and data[:4] == b'\xca\xfe\xba\xbe':
+                          majors.add(struct.unpack('>H', data[6:8])[0])
+          if 65 not in majors:
               raise SystemExit(f'Expected Java 21 class major 65; saw {sorted(majors)}')
-          print('Verified Java 21-compatible plugin classes (major 65).')
+          print('Verified Java 21-compatible plugin classes.')
           PY
-
-      - name: Stage versioned Legacy JAR
-        if: steps.paper_build.outcome == 'success'
+      - name: Stage versioned JAR
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p dist
           mapfile -t jars < <(find build/libs -maxdepth 1 -type f -name 'SF_IE2Legacy*.jar' ! -name '*-sources.jar' ! -name '*-javadoc.jar')
           test "${#jars[@]}" -eq 1
-          OUTPUT="dist/SF_InfinityExpansion2_Legacy_v${LEGACY_ARTIFACT_VERSION}.jar"
-          cp "${jars[0]}" "$OUTPUT"
-          test -s "$OUTPUT"
-          sha256sum "$OUTPUT"
-
-      - name: Upload direct versioned IE2 Legacy JAR
-        if: steps.paper_build.outcome == 'success'
+          cp "${jars[0]}" "dist/${OUTPUT_NAME}"
+          test -s "dist/${OUTPUT_NAME}"
+          sha256sum "dist/${OUTPUT_NAME}"
+      - name: Upload CI artifact
         uses: actions/upload-artifact@v7
         with:
-          path: dist/SF_InfinityExpansion2_Legacy_v${{ env.LEGACY_ARTIFACT_VERSION }}.jar
-          archive: false
+          name: SF_InfinityExpansion2${{ env.LEGACY_ARTIFACT_VERSION }}
+          path: dist/${{ env.OUTPUT_NAME }}
           if-no-files-found: error
-
-      - name: Fail job if Paper build failed
-        if: steps.paper_build.outcome == 'failure'
-        run: exit 1
+      - name: Publish raw JAR release asset
+        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then TAG="$GITHUB_REF_NAME"; else TAG="v${LEGACY_ARTIFACT_VERSION}"; fi
+          JAR="dist/${OUTPUT_NAME}"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" "$JAR" --clobber
+          else
+            gh release create "$TAG" "$JAR" --target "$GITHUB_SHA" --generate-notes --title "SF_InfinityExpansion2 $TAG"
+          fi
 
   source-safety:
     name: Migration safety checks
@@ -180,7 +98,5 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
-
       - name: Verify migration invariants
-        run: |
-          python3 scripts/verify_legacy_migration.py
+        run: python3 scripts/verify_legacy_migration.py
