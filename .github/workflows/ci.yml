@@ -36,13 +36,6 @@ jobs:
         run: |
           set -o pipefail
           ./gradlew clean shadowJar --stacktrace --console=plain --warning-mode=all -PpaperApiVersion=26.2.build.+ -PbuildVersion="${LEGACY_ARTIFACT_VERSION}" 2>&1 | tee build-paper-26.2.log
-      - name: Upload build log
-        if: always()
-        uses: actions/upload-artifact@v7
-        with:
-          name: InfinityExpansion2-Paper26.2-build-log
-          path: build-paper-26.2.log
-          if-no-files-found: warn
       - name: Verify Java 21 plugin bytecode
         run: |
           python3 - <<'PY'
@@ -71,12 +64,6 @@ jobs:
           cp "${jars[0]}" "dist/${OUTPUT_NAME}"
           test -s "dist/${OUTPUT_NAME}"
           sha256sum "dist/${OUTPUT_NAME}"
-      - name: Upload CI artifact
-        uses: actions/upload-artifact@v7
-        with:
-          name: SF_InfinityExpansion2${{ env.LEGACY_ARTIFACT_VERSION }}
-          path: dist/${{ env.OUTPUT_NAME }}
-          if-no-files-found: error
       - name: Publish raw JAR release asset
         if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
         env:
